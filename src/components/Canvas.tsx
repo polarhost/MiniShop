@@ -1,13 +1,19 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { ToolType, Rectangle, Point, ViewTransform } from '@/types/tools';
+import { paintAtPosition } from '@/utils/canvasDrawing';
+import { drawCursorPreview } from '@/utils/canvasOverlay';
+import { getMousePos, getScreenPos, isPointInSelection } from '@/utils/canvasCoordinates';
+import { useCanvasInteractions } from '@/hooks/useCanvasInteractions';
 
 interface CanvasProps {
   width: number;
   height: number;
   brushSize: number;
+  setBrushSize: (size: number) => void;
   brushHardness: number;
+  brushOpacity: number;
   brushColor: string;
   activeTool: ToolType;
   selection: Rectangle | null;
@@ -16,18 +22,24 @@ interface CanvasProps {
   onViewTransformChange: (transform: ViewTransform) => void;
 }
 
-export default function Canvas({ 
+export interface CanvasRef {
+  deleteSelection: () => void;
+}
+
+const Canvas = forwardRef<CanvasRef, CanvasProps>(function Canvas({ 
   width, 
   height, 
   brushSize,
+  setBrushSize,
   brushHardness,
+  brushOpacity,
   brushColor, 
   activeTool, 
   selection,
   onSelectionChange,
   viewTransform = { zoom: 1, panX: 0, panY: 0 },
   onViewTransformChange
-}: CanvasProps) {
+}, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,8 +47,14 @@ export default function Canvas({
   const [lastPos, setLastPos] = useState<Point>({ x: 0, y: 0 });
   const [selectionStart, setSelectionStart] = useState<Point | null>(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [cursorPos, setCursorPos] = useState<Point | null>(null);
+  const [isResizingBrush, setIsResizingBrush] = useState(false);
+  const [tempBrushSize, setTempBrushSize] = useState(brushSize);
+  const [fixedCursorPos, setFixedCursorPos] = useState<Point | null>(null);
   const panStartRef = useRef<Point>({ x: 0, y: 0 });
   const panStartTransformRef = useRef<ViewTransform>({ zoom: 1, panX: 0, panY: 0 });
+  const brushResizeStartRef = useRef<Point>({ x: 0, y: 0 });
+  const originalBrushSizeRef = useRef<number>(brushSize);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -49,92 +67,44 @@ export default function Canvas({
     ctx.fillRect(0, 0, width, height);
   }, [width, height]);
 
+
   useEffect(() => {
-    drawSelectionOverlay();
-  }, [selection]);
-
-  const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>): Point => {
-    const container = containerRef.current;
-    if (!container) return { x: 0, y: 0 };
-
-    const rect = container.getBoundingClientRect();
-    const rawX = e.clientX - rect.left;
-    const rawY = e.clientY - rect.top;
-    
-    // Transform screen coordinates to canvas coordinates
-    const canvasX = (rawX - viewTransform.panX) / viewTransform.zoom;
-    const canvasY = (rawY - viewTransform.panY) / viewTransform.zoom;
-    
-    return {
-      x: canvasX,
-      y: canvasY
-    };
-  };
-
-  const getScreenPos = (e: React.MouseEvent<HTMLCanvasElement>): Point => {
-    const container = containerRef.current;
-    if (!container) return { x: 0, y: 0 };
-
-    const rect = container.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
-  };
-
-  const isPointInSelection = (point: Point): boolean => {
-    if (!selection) return true;
-    
-    return point.x >= selection.x && 
-           point.x <= selection.x + selection.width &&
-           point.y >= selection.y && 
-           point.y <= selection.y + selection.height;
-  };
-
-  const drawSelectionOverlay = () => {
     const overlayCanvas = overlayCanvasRef.current;
     if (!overlayCanvas) return;
-
+    
     const ctx = overlayCanvas.getContext('2d');
     if (!ctx) return;
-
-    ctx.clearRect(0, 0, width, height);
-
-    if (selection) {
-      ctx.strokeStyle = '#007acc';
-      ctx.lineWidth = 1 / viewTransform.zoom; // Adjust line width for zoom
-      ctx.setLineDash([5 / viewTransform.zoom, 5 / viewTransform.zoom]); // Adjust dash for zoom
-      ctx.strokeRect(selection.x, selection.y, selection.width, selection.height);
-
-      ctx.fillStyle = 'rgba(0, 122, 204, 0.1)';
-      ctx.fillRect(selection.x, selection.y, selection.width, selection.height);
-    }
-  };
-
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
     
-    const container = containerRef.current;
-    if (!container) return;
+    drawCursorPreview(
+      ctx,
+      width,
+      height,
+      cursorPos,
+      fixedCursorPos,
+      brushSize,
+      tempBrushSize,
+      activeTool,
+      viewTransform,
+      isPanning,
+      isResizingBrush,
+      selection,
+      originalBrushSizeRef.current
+    );
+  }, [cursorPos, fixedCursorPos, brushSize, tempBrushSize, activeTool, viewTransform, isPanning, isResizingBrush, selection, width, height]);
 
-    const rect = container.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+  // Clear cursor position when switching away from brush/eraser tools
+  useEffect(() => {
+    if (activeTool !== 'brush' && activeTool !== 'eraser') {
+      setCursorPos(null);
+    }
+  }, [activeTool]);
 
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.1, Math.min(5, viewTransform.zoom * zoomFactor));
+  const { handleWheel, getCursor } = useCanvasInteractions(
+    containerRef,
+    viewTransform,
+    onViewTransformChange
+  );
 
-    // Zoom towards mouse position
-    const zoomRatio = newZoom / viewTransform.zoom;
-    const newPanX = mouseX - (mouseX - viewTransform.panX) * zoomRatio;
-    const newPanY = mouseY - (mouseY - viewTransform.panY) * zoomRatio;
-
-    onViewTransformChange({
-      zoom: newZoom,
-      panX: newPanX,
-      panY: newPanY
-    });
-  }, [viewTransform, onViewTransformChange]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -145,33 +115,80 @@ export default function Canvas({
   }, [handleWheel]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const pos = getMousePos(e);
-    const screenPos = getScreenPos(e);
-    setIsMouseDown(true);
+    const pos = getMousePos(e, containerRef, viewTransform);
+    const screenPos = getScreenPos(e, containerRef);
+    
+    // button 2 == right click.
+    // Check for Alt + right-click for brush/eraser size adjustment
+    if (e.altKey && (activeTool === 'brush' || activeTool === 'eraser') && e.button === 2) {
+      setIsMouseDown(true);
+      setIsResizingBrush(true);
+      brushResizeStartRef.current = screenPos;
+      originalBrushSizeRef.current = brushSize;
+      setTempBrushSize(brushSize);
+      setFixedCursorPos(pos); // Fix cursor at initial position
+      return;
+    }
+    // button 0 == right click
+    if (e.button === 0  ) {
+      setIsMouseDown(true);
+      
+      if (activeTool === 'pan') {
+        setIsPanning(true);
+        panStartRef.current = screenPos;
+        panStartTransformRef.current = { ...viewTransform };
+        return;
+      }
 
-    // Middle mouse button or pan tool
-    if (e.button === 1 || activeTool === 'pan') {
+      if (activeTool === 'brush' || activeTool === 'eraser') {
+        if (isPointInSelection(pos, selection)) {
+          setLastPos(pos);
+          
+          // Paint immediately on click (for single clicks)
+          const canvas = canvasRef.current;
+          const ctx = canvas?.getContext('2d');
+          if (ctx) {
+            paintAtPosition(ctx, pos, pos, activeTool, brushSize, brushHardness, brushOpacity, brushColor, viewTransform);
+          }
+        }
+      } else if (activeTool === 'selection') {
+        setSelectionStart(pos);
+        onSelectionChange(null);
+      }
+    }
+
+    // Middle mouse button (button 1) always pans regardless of tool
+    if (e.button === 1) {
+      setIsMouseDown(true);
       setIsPanning(true);
       panStartRef.current = screenPos;
       panStartTransformRef.current = { ...viewTransform };
-      return;
-    }
-
-    if (activeTool === 'brush') {
-      if (isPointInSelection(pos)) {
-        setLastPos(pos);
-      }
-    } else if (activeTool === 'selection') {
-      setSelectionStart(pos);
-      onSelectionChange(null);
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const currentPos = getMousePos(e);
-    const screenPos = getScreenPos(e);
+    const currentPos = getMousePos(e, containerRef, viewTransform);
+    const screenPos = getScreenPos(e, containerRef);
+
+    // Update cursor position for preview (always for brush/eraser, regardless of mouse down state)
+    if (activeTool === 'brush' || activeTool === 'eraser') {
+      setCursorPos(currentPos);
+    }
 
     if (!isMouseDown) return;
+
+    // Handle brush resizing
+    if (isResizingBrush) {
+      const deltaX = screenPos.x - brushResizeStartRef.current.x;
+      const sensitivity = 0.5; // Adjust this to make resizing more/less sensitive
+      // Note: Max brush size
+      const newSize = Math.max(1, Math.min(500, originalBrushSizeRef.current + deltaX * sensitivity));
+      setTempBrushSize(newSize);
+      
+      // Update the actual brush size in real-time for slider feedback
+      setBrushSize(newSize);
+      return;
+    }
 
     // Handle panning
     if (isPanning) {
@@ -187,50 +204,14 @@ export default function Canvas({
       return;
     }
 
-    if (activeTool === 'brush') {
-      if (!isPointInSelection(currentPos) || !isPointInSelection(lastPos)) return;
+    if (activeTool === 'brush' || activeTool === 'eraser') {
+      if (!isPointInSelection(currentPos, selection) || !isPointInSelection(lastPos, selection)) return;
 
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
       if (!ctx) return;
 
-      ctx.strokeStyle = brushColor;
-      ctx.lineWidth = brushSize / viewTransform.zoom; // Adjust brush size for zoom
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      
-      // Apply brush hardness by adjusting alpha
-      const hardnessAlpha = brushHardness / 100;
-      ctx.globalAlpha = hardnessAlpha;
-
-      // For soft brushes (low hardness), create a gradient effect
-      if (brushHardness < 100) {
-        const gradient = ctx.createRadialGradient(
-          currentPos.x, currentPos.y, 0,
-          currentPos.x, currentPos.y, (brushSize / viewTransform.zoom) / 2
-        );
-        
-        const color = ctx.strokeStyle;
-        gradient.addColorStop(0, color as string);
-        gradient.addColorStop(1, 'transparent');
-        
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(currentPos.x, currentPos.y, (brushSize / viewTransform.zoom) / 2, 0, Math.PI * 2);
-        ctx.fillStyle = gradient;
-        ctx.fill();
-        ctx.restore();
-      } else {
-        // Hard brush - normal line drawing
-        ctx.beginPath();
-        ctx.moveTo(lastPos.x, lastPos.y);
-        ctx.lineTo(currentPos.x, currentPos.y);
-        ctx.stroke();
-      }
-      
-      // Reset alpha for other drawing operations
-      ctx.globalAlpha = 1;
-
+      paintAtPosition(ctx, currentPos, lastPos, activeTool, brushSize, brushHardness, brushOpacity, brushColor, viewTransform);
       setLastPos(currentPos);
     } else if (activeTool === 'selection' && selectionStart) {
       const newSelection: Rectangle = {
@@ -247,70 +228,96 @@ export default function Canvas({
     setIsMouseDown(false);
     setSelectionStart(null);
     setIsPanning(false);
-  };
-
-  const getCursor = () => {
-    if (isPanning) return 'grabbing';
     
-    switch (activeTool) {
-      case 'brush':
-        return 'crosshair';
-      case 'selection':
-        return 'crosshair';
-      case 'pan':
-        return 'grab';
-      default:
-        return 'default';
+    // End brush resize
+    if (isResizingBrush) {
+      setIsResizingBrush(false);
+      setFixedCursorPos(null); // Clear fixed position
+      // No need to set brush size here since it's updated in real-time
     }
   };
 
+  const handleMouseEnter = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const currentPos = getMousePos(e, containerRef, viewTransform);
+    if (activeTool === 'brush' || activeTool === 'eraser') {
+      setCursorPos(currentPos);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setCursorPos(null);
+  };
+
+
+  const deleteSelectionArea = useCallback(() => {
+    if (!selection) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return;
+
+    // Save the current context state
+    ctx.save();
+    
+    // Reset any transformations and composite operations
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    
+    // Fill the selected area with background color (white)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(selection.x, selection.y, selection.width, selection.height);
+    
+    // Restore the context state
+    ctx.restore();
+  }, [selection]);
+
+  // Expose deleteSelection function via ref
+  useImperativeHandle(ref, () => ({
+    deleteSelection: deleteSelectionArea
+  }), [deleteSelectionArea]);
+
+
   return (
-    <div className="flex-1 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--surface-dark)' }}>
-      <div 
-        ref={containerRef}
-        className="relative border-2 shadow-lg overflow-hidden" 
-        style={{ 
-          borderColor: 'var(--border)',
-          width: '100%',
-          height: '100%',
-          maxWidth: '90vw',
-          maxHeight: '80vh'
+    <div 
+      ref={containerRef}
+      className="w-full h-full relative overflow-hidden"
+    >
+      <div
+        className="absolute"
+        style={{
+          transform: `translate(${viewTransform.panX}px, ${viewTransform.panY}px) scale(${viewTransform.zoom})`,
+          transformOrigin: '0 0',
+          width: width,
+          height: height
         }}
       >
-        <div
-          className="absolute"
-          style={{
-            transform: `translate(${viewTransform.panX}px, ${viewTransform.panY}px) scale(${viewTransform.zoom})`,
-            transformOrigin: '0 0',
-            width: width,
-            height: height
+        <canvas
+          ref={canvasRef}
+          width={width}
+          height={height}
+          style={{ 
+            display: 'block'
           }}
-        >
-          <canvas
-            ref={canvasRef}
-            width={width}
-            height={height}
-            style={{ 
-              display: 'block'
-            }}
-          />
-          <canvas
-            ref={overlayCanvasRef}
-            width={width}
-            height={height}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onContextMenu={(e) => e.preventDefault()}
-            className="absolute top-0 left-0"
-            style={{ 
-              display: 'block',
-              cursor: getCursor()
-            }}
-          />
-        </div>
+        />
+        <canvas
+          ref={overlayCanvasRef}
+          width={width}
+          height={height}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onContextMenu={(e) => e.preventDefault()}
+          className="absolute top-0 left-0"
+          style={{ 
+            display: 'block',
+            cursor: getCursor(isPanning, isResizingBrush, activeTool)
+          }}
+        />
       </div>
     </div>
   );
-}
+});
+
+export default Canvas;

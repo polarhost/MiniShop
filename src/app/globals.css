@@ -5,11 +5,12 @@
   --foreground: #e8e8e8;
   --surface: #3a3a3a;
   --surface-light: #4a4a4a;
+  --surface-lighter: #7a7a7a;
   --surface-dark: #262626;
   --border: #555555;
   --border-light: #666666;
-  --accent: #007acc;
-  --accent-hover: #1a8cdb;
+  --accent: #2c2c2c;
+  --accent-hover: #808080;
   --text-primary: #e8e8e8;
   --text-secondary: #b8b8b8;
   --text-muted: #888888;

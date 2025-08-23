@@ -93,9 +93,10 @@ export default function NumericInput({
         max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+        className="w-full h-2 rounded-lg appearance-none"
         style={{
           backgroundColor: 'var(--surface-dark)',
+          accentColor: 'var(--surface-lighter)',
         }}
       />
     </div>

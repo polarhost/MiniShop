@@ -1,4 +1,4 @@
-export type ToolType = 'brush' | 'selection' | 'pan';
+export type ToolType = 'brush' | 'eraser' | 'selection' | 'pan';
 
 export interface Point {
   x: number;

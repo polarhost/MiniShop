@@ -8,6 +8,7 @@ import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import { FaEraser } from 'react-icons/fa';
 import { ToolType, ViewTransform } from '@/types/tools';
 import NumericInput from './NumericInput';
 
@@ -18,6 +19,8 @@ interface ToolbarProps {
   setBrushSize: (size: number) => void;
   brushHardness: number;
   setBrushHardness: (hardness: number) => void;
+  brushOpacity: number;
+  setBrushOpacity: (opacity: number) => void;
   brushColor: string;
   setBrushColor: (color: string) => void;
   onClearSelection: () => void;
@@ -32,6 +35,8 @@ export default function Toolbar({
   setBrushSize,
   brushHardness,
   setBrushHardness,
+  brushOpacity,
+  setBrushOpacity,
   brushColor, 
   setBrushColor,
   onClearSelection,
@@ -46,6 +51,7 @@ export default function Toolbar({
 
   const tools = [
     { id: 'brush' as ToolType, icon: BrushIcon, title: 'Brush Tool' },
+    { id: 'eraser' as ToolType, icon: FaEraser, title: 'Eraser Tool' },
     { id: 'selection' as ToolType, icon: CropFreeIcon, title: 'Rectangle Selection' },
     { id: 'pan' as ToolType, icon: PanToolIcon, title: 'Pan Tool' }
   ];
@@ -118,7 +124,7 @@ export default function Toolbar({
               <button
                 key={tool.id}
                 onClick={() => setActiveTool(tool.id)}
-                className={`w-10 h-10 rounded-lg transition-colors flex items-center justify-center ${
+                className={`w-10 h-10 rounded-md transition-colors flex items-center justify-center ${
                   activeTool === tool.id ? 'shadow-inner' : 'hover:shadow-md'
                 }`}
                 style={{
@@ -221,10 +227,10 @@ export default function Toolbar({
           </button>
         </div>
 
-        {activeTool === 'brush' && (
+        {(activeTool === 'brush' || activeTool === 'eraser') && (
           <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
             <h3 className="text-xs font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>
-              BRUSH
+              {activeTool === 'brush' ? 'BRUSH' : 'ERASER'}
             </h3>
             
             <div className="space-y-4">
@@ -232,7 +238,7 @@ export default function Toolbar({
                 value={brushSize}
                 onChange={setBrushSize}
                 min={1}
-                max={100}
+                max={500}
                 label="Size"
                 suffix="px"
               />
@@ -243,6 +249,15 @@ export default function Toolbar({
                 min={0}
                 max={100}
                 label="Hardness"
+                suffix="%"
+              />
+              
+              <NumericInput
+                value={brushOpacity}
+                onChange={setBrushOpacity}
+                min={0}
+                max={100}
+                label="Opacity"
                 suffix="%"
               />
             </div>

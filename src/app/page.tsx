@@ -1,16 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Canvas from '@/components/Canvas';
+import { useState, useEffect, useRef } from 'react';
+import Canvas, { CanvasRef } from '@/components/Canvas';
 import Toolbar from '@/components/Toolbar';
 import { ToolType, Rectangle, ViewTransform } from '@/types/tools';
 
 export default function Home() {
+  const canvasRef = useRef<CanvasRef>(null);
+  const selectionRef = useRef<Rectangle | null>(null);
   const [activeTool, setActiveTool] = useState<ToolType>('brush');
-  const [brushSize, setBrushSize] = useState(10);
+  const [brushSize, setBrushSize] = useState(40);
   const [brushHardness, setBrushHardness] = useState(100);
+  const [brushOpacity, setBrushOpacity] = useState(100);
   const [brushColor, setBrushColor] = useState('#000000');
   const [selection, setSelection] = useState<Rectangle | null>(null);
+  
+  // Update ref when selection changes
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
   const [viewTransform, setViewTransform] = useState<ViewTransform>({
     zoom: 1,
     panX: 0,
@@ -19,6 +27,11 @@ export default function Home() {
 
   const handleClearSelection = () => {
     setSelection(null);
+  };
+
+  const handleDeleteSelection = () => {
+    if (!selection) return;
+    canvasRef.current?.deleteSelection();
   };
 
   useEffect(() => {
@@ -57,6 +70,10 @@ export default function Home() {
         case 'B':
           setActiveTool('brush');
           break;
+        case 'e':
+        case 'E':
+          setActiveTool('eraser');
+          break;
         case 's':
         case 'S':
           setActiveTool('selection');
@@ -66,6 +83,14 @@ export default function Home() {
           setActiveTool('pan');
           break;
       }
+
+      // Delete key functionality
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const currentSelection = selectionRef.current;
+        if (currentSelection) {
+          canvasRef.current?.deleteSelection();
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -73,13 +98,15 @@ export default function Home() {
   }, []);
 
   const getStatusText = () => {
-    const toolName = activeTool === 'brush' ? 'Brush' : activeTool === 'selection' ? 'Selection' : 'Pan';
+    const toolName = activeTool === 'brush' ? 'Brush' : 
+                     activeTool === 'eraser' ? 'Eraser' :
+                     activeTool === 'selection' ? 'Selection' : 'Pan';
     const zoomInfo = ` | Zoom: ${Math.round(viewTransform.zoom * 100)}%`;
     const selectionInfo = selection 
       ? ` | Selection: ${Math.round(selection.width)}×${Math.round(selection.height)}` 
       : '';
-    const brushInfo = activeTool === 'brush' 
-      ? ` | Size: ${brushSize}px | Color: ${brushColor}` 
+    const brushInfo = (activeTool === 'brush' || activeTool === 'eraser') 
+      ? ` | Size: ${brushSize}px | Opacity: ${brushOpacity}%${activeTool === 'brush' ? ` | Color: ${brushColor}` : ''}` 
       : '';
     
     return `${toolName} Tool${zoomInfo}${selectionInfo}${brushInfo}`;
@@ -108,6 +135,8 @@ export default function Home() {
           setBrushSize={setBrushSize}
           brushHardness={brushHardness}
           setBrushHardness={setBrushHardness}
+          brushOpacity={brushOpacity}
+          setBrushOpacity={setBrushOpacity}
           brushColor={brushColor}
           setBrushColor={setBrushColor}
           onClearSelection={handleClearSelection}
@@ -116,10 +145,13 @@ export default function Home() {
         />
         
         <Canvas
+          ref={canvasRef}
           width={800}
           height={600}
           brushSize={brushSize}
+          setBrushSize={setBrushSize}
           brushHardness={brushHardness}
+          brushOpacity={brushOpacity}
           brushColor={brushColor}
           activeTool={activeTool}
           selection={selection}
