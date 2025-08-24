@@ -22,6 +22,7 @@ interface LayersPanelProps {
   onLayerDelete: (layerId: string) => void;
   onLayerAdd: () => void;
   onOpacityChange: (layerId: string, opacity: number) => void;
+  onLayerRename: (layerId: string, newName: string) => void;
 }
 
 const LayersPanel: React.FC<LayersPanelProps> = ({
@@ -31,10 +32,62 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
   onLayerToggleVisibility,
   onLayerDelete,
   onLayerAdd,
-  onOpacityChange
+  onOpacityChange,
+  onLayerRename
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [panelSize, setPanelSize] = useState({ width: 250, height: 300 });
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
+
+  const handleStartRename = (layerId: string, currentName: string) => {
+    setEditingLayerId(layerId);
+    setEditingName(currentName);
+  };
+
+  const handleConfirmRename = (layerId: string) => {
+    const trimmedName = editingName.trim();
+    const currentLayer = layers.find(l => l.id === layerId);
+    
+    if (trimmedName && trimmedName !== currentLayer?.name) {
+      // Check for duplicate names
+      const isDuplicate = layers.some(l => l.id !== layerId && l.name === trimmedName);
+      if (isDuplicate) {
+        // Add a number suffix to make it unique
+        let counter = 1;
+        let uniqueName = `${trimmedName} ${counter}`;
+        while (layers.some(l => l.name === uniqueName)) {
+          counter++;
+          uniqueName = `${trimmedName} ${counter}`;
+        }
+        onLayerRename(layerId, uniqueName);
+      } else {
+        onLayerRename(layerId, trimmedName);
+      }
+    } else if (!trimmedName && currentLayer) {
+      // If empty, revert to current name
+      setEditingName(currentLayer.name);
+      return; // Don't close the edit mode
+    }
+    
+    setEditingLayerId(null);
+    setEditingName('');
+  };
+
+  const handleCancelRename = () => {
+    setEditingLayerId(null);
+    setEditingName('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, layerId: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleConfirmRename(layerId);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelRename();
+    }
+  };
 
   return (
     <div 
@@ -71,21 +124,6 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
 
       {!isCollapsed && (
         <>
-          {/* Add Layer Button */}
-          <div className="p-2 border-b" style={{ borderColor: 'var(--border)' }}>
-            <button
-              onClick={onLayerAdd}
-              className="w-full flex items-center justify-center gap-2 p-2 rounded-md transition-colors hover:shadow-md"
-              style={{ 
-                backgroundColor: 'var(--surface-light)',
-                color: 'var(--text-primary)'
-              }}
-            >
-              <AddIcon fontSize="small" />
-              <span className="text-sm">New Layer</span>
-            </button>
-          </div>
-
           {/* Layers List */}
           <div className="flex-1 overflow-y-auto">
             {layers.map((layer) => (
@@ -102,9 +140,32 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                 onClick={() => onLayerSelect(layer.id)}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium truncate flex-1 mr-2">
-                    {layer.name}
-                  </span>
+                  {editingLayerId === layer.id ? (
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={() => handleConfirmRename(layer.id)}
+                      onKeyDown={(e) => handleKeyDown(e, layer.id)}
+                      onFocus={(e) => e.target.select()}
+                      className="text-sm font-medium rounded px-1 flex-1 mr-2 outline-none"
+                      style={{ 
+                        color: 'inherit',
+                        backgroundColor: activeLayerId === layer.id ? 'rgba(255,255,255,0.1)' : 'var(--surface-light)',
+                        border: `1px solid ${activeLayerId === layer.id ? 'rgba(255,255,255,0.3)' : 'var(--border)'}`
+                      }}
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span 
+                      className="text-sm font-medium truncate flex-1 mr-2 cursor-pointer"
+                      onDoubleClick={() => handleStartRename(layer.id, layer.name)}
+                      title="Double-click to rename"
+                    >
+                      {layer.name}
+                    </span>
+                  )}
                   
                   <div className="flex items-center gap-1">
                     <button
@@ -161,6 +222,27 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+          
+          {/* Add Layer Button - Bottom */}
+          <div className="p-2 border-t flex justify-end" style={{ borderColor: 'var(--border)' }}>
+            <button
+              onClick={onLayerAdd}
+              className="w-8 h-8 flex items-center justify-center rounded-md transition-all duration-75 hover:shadow-md hover:scale-105"
+              style={{ 
+                backgroundColor: 'var(--surface-light)',
+                color: 'var(--text-primary)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--accent-hover)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--surface-light)';
+              }}
+              title="Add New Layer"
+            >
+              <AddIcon fontSize="small" />
+            </button>
           </div>
         </>
       )}

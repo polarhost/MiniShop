@@ -1,9 +1,12 @@
 export interface HistoryAction {
-  type: 'paint' | 'erase' | 'selection_delete' | 'layer_add' | 'layer_delete' | 'layer_opacity' | 'layer_visibility';
+  type: 'paint' | 'erase' | 'selection_delete' | 'layer_add' | 'layer_delete' | 'layer_opacity' | 'layer_visibility' | 'layer_rename';
   layerId?: string;
   canvasState?: ImageData;
   beforeState?: Map<string, ImageData>; // State before the action
   afterState?: Map<string, ImageData>;  // State after the action
+  // For layer property changes
+  beforeValue?: any;
+  afterValue?: any;
   timestamp: number;
   description: string;
 }

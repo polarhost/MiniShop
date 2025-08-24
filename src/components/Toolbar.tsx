@@ -183,7 +183,7 @@ export default function Toolbar({
           <div className="flex flex-wrap gap-2 mb-3">
             <button
               onClick={handleZoomIn}
-              className="w-8 h-8 rounded transition-colors hover:shadow-sm flex items-center justify-center"
+              className="w-8 h-8 rounded transition-colors hover:shadow-sm hover:bg-white flex items-center justify-center"
               style={{
                 backgroundColor: 'var(--surface-light)',
                 color: 'var(--text-primary)'

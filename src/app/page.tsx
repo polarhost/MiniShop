@@ -85,8 +85,26 @@ export default function Home() {
     ));
   };
 
+  const handleLayerRename = (layerId: string, newName: string) => {
+    setLayers(layers.map(layer => 
+      layer.id === layerId 
+        ? { ...layer, name: newName }
+        : layer
+    ));
+  };
+
   useEffect(() => {
+    const isInputActive = (e: KeyboardEvent): boolean => {
+      const target = e.target as HTMLElement;
+      return target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true');
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts if user is typing in an input field
+      if (isInputActive(e)) {
+        return;
+      }
+
       if (e.ctrlKey || e.metaKey) {
         switch (e.key) {
           case '=':
@@ -240,6 +258,7 @@ export default function Home() {
             onLayerDelete={handleLayerDelete}
             onLayerAdd={handleLayerAdd}
             onOpacityChange={handleOpacityChange}
+            onLayerRename={handleLayerRename}
           />
         </div>
       </div>
