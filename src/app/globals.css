@@ -14,6 +14,7 @@
   --text-primary: #e8e8e8;
   --text-secondary: #b8b8b8;
   --text-muted: #888888;
+  --error: #ff5555;
 }
 
 @theme inline {

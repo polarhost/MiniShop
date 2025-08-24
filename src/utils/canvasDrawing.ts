@@ -9,16 +9,17 @@ export const paintAtPosition = (
   brushHardness: number,
   brushOpacity: number,
   brushColor: string,
-  viewTransform: ViewTransform
+  viewTransform: ViewTransform,
+  isBackgroundLayer = false
 ) => {
   // Apply opacity and hardness
   const opacityValue = brushOpacity / 100;
   const hardnessValue = brushHardness / 100;
 
   if (activeTool === 'eraser') {
-    // For eraser, draw with the background color (white) to "erase"
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = '#ffffff'; // Draw with white background color to erase
+    // For all layers (including background), use destination-out to make areas transparent
+    // This allows the transparency pattern to show through
+    ctx.globalCompositeOperation = 'destination-out';
     ctx.globalAlpha = opacityValue * hardnessValue;
     
     // For soft eraser (low hardness), create a gradient effect
@@ -28,8 +29,8 @@ export const paintAtPosition = (
         currentPos.x, currentPos.y, (brushSize / viewTransform.zoom) / 2
       );
       
-      gradient.addColorStop(0, `rgba(255,255,255,${hardnessValue})`);
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      gradient.addColorStop(0, `rgba(0,0,0,${hardnessValue})`);
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
       
       ctx.save();
       ctx.beginPath();
@@ -38,10 +39,11 @@ export const paintAtPosition = (
       ctx.fill();
       ctx.restore();
     } else {
-      // Hard eraser - normal line drawing with white
+      // Hard eraser - normal line drawing to cut out
       ctx.lineWidth = brushSize / viewTransform.zoom;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(0,0,0,1)'; // Color doesn't matter with destination-out
       ctx.beginPath();
       ctx.moveTo(lastPos.x, lastPos.y);
       ctx.lineTo(currentPos.x, currentPos.y);

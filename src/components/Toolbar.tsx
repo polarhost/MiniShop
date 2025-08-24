@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import BrushIcon from '@mui/icons-material/Brush';
 import CropFreeIcon from '@mui/icons-material/CropFree';
 import PanToolIcon from '@mui/icons-material/PanTool';
@@ -46,6 +46,7 @@ export default function Toolbar({
   const [toolbarWidth, setToolbarWidth] = useState(200);
   const [isResizing, setIsResizing] = useState(false);
   const resizeRef = useRef<HTMLDivElement>(null);
+  const resizeStartRef = useRef({ mouseX: 0, panelWidth: 0 });
 
   const colors = ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'];
 
@@ -82,18 +83,23 @@ export default function Toolbar({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsResizing(true);
+    resizeStartRef.current = {
+      mouseX: e.clientX,
+      panelWidth: toolbarWidth
+    };
     e.preventDefault();
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return;
-    const newWidth = Math.max(160, Math.min(400, e.clientX));
+    const deltaX = e.clientX - resizeStartRef.current.mouseX;
+    const newWidth = Math.max(160, Math.min(400, resizeStartRef.current.panelWidth + deltaX));
     setToolbarWidth(newWidth);
-  };
+  }, [isResizing]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsResizing(false);
-  };
+  }, []);
 
   // Add event listeners for resize
   useEffect(() => {
@@ -105,7 +111,7 @@ export default function Toolbar({
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isResizing]);
+  }, [isResizing, handleMouseMove, handleMouseUp]);
 
   return (
     <div 
@@ -269,7 +275,7 @@ export default function Toolbar({
       <div
         ref={resizeRef}
         onMouseDown={handleMouseDown}
-        className="w-1 cursor-col-resize hover:bg-accent transition-colors flex items-center justify-center"
+        className="w-1 cursor-col-resize flex items-center justify-center"
         style={{ backgroundColor: isResizing ? 'var(--accent)' : 'var(--border)' }}
         title="Resize Panel"
       >

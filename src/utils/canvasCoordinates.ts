@@ -1,7 +1,7 @@
 import { Point, Rectangle, ViewTransform } from '@/types/tools';
 
 export const getMousePos = (
-  e: React.MouseEvent<HTMLCanvasElement>,
+  e: React.MouseEvent<HTMLElement>,
   containerRef: React.RefObject<HTMLDivElement | null>,
   viewTransform: ViewTransform
 ): Point => {
@@ -23,7 +23,7 @@ export const getMousePos = (
 };
 
 export const getScreenPos = (
-  e: React.MouseEvent<HTMLCanvasElement>,
+  e: React.MouseEvent<HTMLElement>,
   containerRef: React.RefObject<HTMLDivElement | null>
 ): Point => {
   const container = containerRef.current;

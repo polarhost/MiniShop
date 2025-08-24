@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Canvas, { CanvasRef } from '@/components/Canvas';
 import Toolbar from '@/components/Toolbar';
+import LayersPanel, { Layer } from '@/components/LayersPanel';
 import { ToolType, Rectangle, ViewTransform } from '@/types/tools';
 
 export default function Home() {
@@ -14,6 +15,10 @@ export default function Home() {
   const [brushOpacity, setBrushOpacity] = useState(100);
   const [brushColor, setBrushColor] = useState('#000000');
   const [selection, setSelection] = useState<Rectangle | null>(null);
+  const [layers, setLayers] = useState<Layer[]>([
+    { id: 'layer-1', name: 'Background', visible: true, opacity: 100 }
+  ]);
+  const [activeLayerId, setActiveLayerId] = useState('layer-1');
   
   // Update ref when selection changes
   useEffect(() => {
@@ -32,6 +37,52 @@ export default function Home() {
   const handleDeleteSelection = () => {
     if (!selection) return;
     canvasRef.current?.deleteSelection();
+  };
+
+  // Layer management functions
+  const handleLayerSelect = (layerId: string) => {
+    setActiveLayerId(layerId);
+  };
+
+  const handleLayerToggleVisibility = (layerId: string) => {
+    setLayers(layers.map(layer => 
+      layer.id === layerId 
+        ? { ...layer, visible: !layer.visible }
+        : layer
+    ));
+  };
+
+  const handleLayerDelete = (layerId: string) => {
+    if (layers.length <= 1) return; // Don't delete the last layer
+    
+    const newLayers = layers.filter(layer => layer.id !== layerId);
+    setLayers(newLayers);
+    
+    // If we deleted the active layer, select the first remaining layer
+    if (activeLayerId === layerId) {
+      setActiveLayerId(newLayers[0].id);
+    }
+  };
+
+  const handleLayerAdd = () => {
+    const newLayerId = `layer-${Date.now()}`;
+    const newLayer: Layer = {
+      id: newLayerId,
+      name: `Layer ${layers.length + 1}`,
+      visible: true,
+      opacity: 100
+    };
+    
+    setLayers([...layers, newLayer]);
+    setActiveLayerId(newLayerId);
+  };
+
+  const handleOpacityChange = (layerId: string, opacity: number) => {
+    setLayers(layers.map(layer => 
+      layer.id === layerId 
+        ? { ...layer, opacity }
+        : layer
+    ));
   };
 
   useEffect(() => {
@@ -60,6 +111,19 @@ export default function Home() {
               panX: 0,
               panY: 0
             });
+            break;
+        case 'z':
+            if (!e.shiftKey) {
+              e.preventDefault();
+              canvasRef.current?.undo();
+            } else {
+              e.preventDefault();
+              canvasRef.current?.redo();
+            }
+            break;
+        case 'y':
+            e.preventDefault();
+            canvasRef.current?.redo();
             break;
         }
       }
@@ -109,7 +173,12 @@ export default function Home() {
       ? ` | Size: ${brushSize}px | Opacity: ${brushOpacity}%${activeTool === 'brush' ? ` | Color: ${brushColor}` : ''}` 
       : '';
     
-    return `${toolName} Tool${zoomInfo}${selectionInfo}${brushInfo}`;
+    // Add undo/redo status
+    const canUndo = canvasRef.current?.canUndo() || false;
+    const canRedo = canvasRef.current?.canRedo() || false;
+    const undoInfo = canUndo || canRedo ? ` | ${canUndo ? 'Ctrl+Z: Undo' : ''}${canUndo && canRedo ? ' | ' : ''}${canRedo ? 'Ctrl+Y: Redo' : ''}` : '';
+    
+    return `${toolName} Tool${zoomInfo}${selectionInfo}${brushInfo}${undoInfo}`;
   };
 
   return (
@@ -144,21 +213,35 @@ export default function Home() {
           onViewTransformChange={setViewTransform}
         />
         
-        <Canvas
-          ref={canvasRef}
-          width={800}
-          height={600}
-          brushSize={brushSize}
-          setBrushSize={setBrushSize}
-          brushHardness={brushHardness}
-          brushOpacity={brushOpacity}
-          brushColor={brushColor}
-          activeTool={activeTool}
-          selection={selection}
-          onSelectionChange={setSelection}
-          viewTransform={viewTransform}
-          onViewTransformChange={setViewTransform}
-        />
+        <div className="flex-1 relative">
+          <Canvas
+            ref={canvasRef}
+            width={800}
+            height={600}
+            brushSize={brushSize}
+            setBrushSize={setBrushSize}
+            brushHardness={brushHardness}
+            brushOpacity={brushOpacity}
+            brushColor={brushColor}
+            activeTool={activeTool}
+            selection={selection}
+            onSelectionChange={setSelection}
+            viewTransform={viewTransform}
+            onViewTransformChange={setViewTransform}
+            layers={layers}
+            activeLayerId={activeLayerId}
+          />
+          
+          <LayersPanel
+            layers={layers}
+            activeLayerId={activeLayerId}
+            onLayerSelect={handleLayerSelect}
+            onLayerToggleVisibility={handleLayerToggleVisibility}
+            onLayerDelete={handleLayerDelete}
+            onLayerAdd={handleLayerAdd}
+            onOpacityChange={handleOpacityChange}
+          />
+        </div>
       </div>
 
       <footer 
